@@ -8,6 +8,7 @@ import { useUndoRedo } from '@/hooks/useUndoRedo';
 
 export function AppShell() {
   useUndoRedo();
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-gray-50">
       <Toolbar />
