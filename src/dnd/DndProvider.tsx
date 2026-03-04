@@ -81,11 +81,8 @@ export function AppDndProvider({ children }: { children: React.ReactNode }) {
         // Repositioning a canvas guest — just move it
         moveCanvasGuest(guestId, canvasX, canvasY);
       } else {
-        // Seated guest dragged to empty canvas → park as floating chip
-        const guest = guests.find((g) => g.id === guestId);
-        if (guest?.tableId) {
-          placeGuestOnCanvas(guestId, canvasX, canvasY);
-        }
+        // Any guest dragged to empty canvas → park as floating chip
+        placeGuestOnCanvas(guestId, canvasX, canvasY);
       }
       return;
     }
