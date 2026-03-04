@@ -33,6 +33,7 @@ export interface AppState {
   selectedTableId: string | null;
   selectedTableIds: string[];
   isGroupRenaming: boolean;
+  sidebarSelectedIds: string[];
 
   // Guest actions
   setGuests: (guests: Guest[]) => void;
@@ -47,6 +48,8 @@ export interface AppState {
   addSubgroup: (groupName: string, subgroupName: string) => void;
   removeSubgroup: (groupName: string, subgroupName: string) => void;
   setGuestSubgroup: (guestId: string, subgroup: string | null) => void;
+  setGuestGroup: (guestIds: string[], group: string) => void;
+  setGuestsSubgroup: (guestIds: string[], subgroup: string | null) => void;
 
   // Party actions
   setParties: (parties: Party[]) => void;
@@ -83,6 +86,13 @@ export interface AppState {
   placeGuestOnCanvas: (guestId: string, x: number, y: number) => void;
   moveCanvasGuest: (guestId: string, x: number, y: number) => void;
   removeGuestFromCanvas: (guestId: string) => void;
+  placeMultipleGuestsOnCanvas: (placements: Array<{guestId: string; x: number; y: number}>) => void;
+
+  // Guest rename
+  renameGuest: (guestId: string, name: string) => void;
+
+  // Sidebar selection
+  setSidebarSelectedIds: (ids: string[]) => void;
 
   // Firebase sync
   loadRemoteState: (data: {
@@ -198,6 +208,7 @@ export const useAppStore = create<AppState>()(
         selectedTableId: null,
         selectedTableIds: [],
         isGroupRenaming: false,
+        sidebarSelectedIds: [],
         hoveredTableId: null,
         alignmentGuides: { x: null, y: null },
         canUndo: false,
@@ -288,6 +299,23 @@ export const useAppStore = create<AppState>()(
         setGuestSubgroup: (guestId, subgroup) => set((draft) => {
           const g = draft.guests.find((g) => g.id === guestId);
           if (g) g.subgroup = subgroup;
+        }),
+
+        setGuestGroup: (guestIds, group) => set((draft) => {
+          for (const guestId of guestIds) {
+            const g = draft.guests.find((g) => g.id === guestId);
+            if (g) g.group = group;
+          }
+          if (!draft.groupOrder.includes(group)) draft.groupOrder.push(group);
+          const usedGroups = new Set(draft.guests.map((g) => g.group));
+          draft.groupOrder = draft.groupOrder.filter((gr) => usedGroups.has(gr));
+        }),
+
+        setGuestsSubgroup: (guestIds, subgroup) => set((draft) => {
+          for (const guestId of guestIds) {
+            const g = draft.guests.find((g) => g.id === guestId);
+            if (g) g.subgroup = subgroup;
+          }
         }),
 
         removeGuest: (guestId) => {
@@ -499,6 +527,41 @@ export const useAppStore = create<AppState>()(
 
         removeGuestFromCanvas: (guestId: string) => set((draft) => {
           draft.canvasGuests = draft.canvasGuests.filter((cg) => cg.guestId !== guestId);
+        }),
+
+        placeMultipleGuestsOnCanvas: (placements) => set((draft) => {
+          for (const { guestId, x, y } of placements) {
+            draft.canvasGuests = draft.canvasGuests.filter((cg) => cg.guestId !== guestId);
+            const g = draft.guests.find((g) => g.id === guestId);
+            if (g) {
+              if (g.tableId && g.seatIndex !== null) {
+                const t = draft.tables.find((t) => t.id === g.tableId);
+                if (t) {
+                  const seat = t.seats.find((s) => s.index === g.seatIndex);
+                  if (seat) seat.guestId = null;
+                }
+              }
+              g.tableId = null;
+              g.seatIndex = null;
+            }
+            draft.canvasGuests.push({ guestId, x, y });
+          }
+          draft.sidebarSelectedIds = [];
+        }),
+
+        renameGuest: (guestId, name) => set((draft) => {
+          const g = draft.guests.find((g) => g.id === guestId);
+          if (!g) return;
+          g.name = name;
+          const party = draft.parties.find((p) => p.id === g.partyId);
+          if (party && party.memberIds.length === 1) {
+            party.name = name;
+            g.partyName = name;
+          }
+        }),
+
+        setSidebarSelectedIds: (ids) => set((draft) => {
+          draft.sidebarSelectedIds = ids;
         }),
 
         setCanvasTransform: (t) =>

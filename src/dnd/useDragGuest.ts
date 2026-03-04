@@ -5,15 +5,22 @@ import type { DragData } from './DndProvider';
 export function useDragGuest(guestId: string) {
   const guests = useAppStore((s) => s.guests);
   const parties = useAppStore((s) => s.parties);
+  const sidebarSelectedIds = useAppStore((s) => s.sidebarSelectedIds);
 
   const guest = guests.find((g) => g.id === guestId);
   const party = parties.find((p) => p.id === guest?.partyId);
   const isLocked = (party?.locked ?? false) && (party?.memberIds.length ?? 0) > 1;
 
+  const multiSelectIds =
+    sidebarSelectedIds.includes(guestId) && sidebarSelectedIds.length > 1
+      ? [...sidebarSelectedIds]
+      : undefined;
+
   const dragData: DragData = {
     guestId,
     partyMemberIds: isLocked ? party?.memberIds : undefined,
     isLocked,
+    multiSelectIds,
   };
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({

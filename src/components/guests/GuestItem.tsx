@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useDragGuest } from '@/dnd/useDragGuest';
 import { useAppStore } from '@/store/useAppStore';
 import { GuestStatusBadge } from './GuestStatusBadge';
@@ -5,18 +6,34 @@ import type { Guest } from '@/types/guest';
 
 interface GuestItemProps {
   guest: Guest;
+  isSelected?: boolean;
+  onSelect?: (e: React.MouseEvent) => void;
 }
 
-export function GuestItem({ guest }: GuestItemProps) {
+export function GuestItem({ guest, isSelected, onSelect }: GuestItemProps) {
   const { attributes, listeners, setNodeRef, isDragging } = useDragGuest(guest.id);
   const tables = useAppStore((s) => s.tables);
   const parties = useAppStore((s) => s.parties);
   const removeGuest = useAppStore((s) => s.removeGuest);
   const checkpoint = useAppStore((s) => s.checkpoint);
+  const renameGuest = useAppStore((s) => s.renameGuest);
+
   const party = parties.find((p) => p.id === guest.partyId);
   const isLocked = (party?.locked ?? false) && (party?.memberIds.length ?? 0) > 1;
   const isSeated = guest.tableId !== null;
   const table = isSeated ? tables.find((t) => t.id === guest.tableId) : null;
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState('');
+
+  function commitEdit() {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== guest.name) {
+      checkpoint();
+      renameGuest(guest.id, trimmed);
+    }
+    setIsEditing(false);
+  }
 
   function handleDelete(e: React.MouseEvent) {
     e.stopPropagation();
@@ -27,11 +44,18 @@ export function GuestItem({ guest }: GuestItemProps) {
   return (
     <div
       ref={setNodeRef}
-      {...(isSeated ? {} : { ...attributes, ...listeners })}
+      {...(isSeated || isEditing ? {} : { ...attributes, ...listeners })}
+      onClick={(e) => {
+        if (isEditing) return;
+        e.stopPropagation();
+        onSelect?.(e);
+      }}
       className={[
         'group flex items-center gap-1 px-2 py-1.5 rounded text-sm select-none transition-all',
         isSeated
           ? 'opacity-50 cursor-default'
+          : isSelected
+          ? 'bg-teal-50 ring-1 ring-teal-300 cursor-grab'
           : isDragging
           ? 'opacity-30 cursor-grabbing'
           : isLocked
@@ -51,7 +75,29 @@ export function GuestItem({ guest }: GuestItemProps) {
         </span>
       )}
 
-      <span className="flex-1 text-gray-800 truncate">{guest.name}</span>
+      {isEditing ? (
+        <input
+          autoFocus
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') commitEdit();
+            if (e.key === 'Escape') setIsEditing(false);
+            e.stopPropagation();
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="flex-1 text-xs px-1 py-0.5 border border-teal-400 rounded outline-none"
+        />
+      ) : (
+        <span
+          className="flex-1 text-gray-800 truncate"
+          onDoubleClick={(e) => { e.stopPropagation(); setEditValue(guest.name); setIsEditing(true); }}
+        >
+          {guest.name}
+        </span>
+      )}
 
       {isSeated && table && (
         <span className="text-[10px] text-gray-400 truncate max-w-[60px]">{table.name}</span>

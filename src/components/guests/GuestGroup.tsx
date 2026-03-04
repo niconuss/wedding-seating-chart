@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useDroppable } from '@dnd-kit/core';
 import { useAppStore } from '@/store/useAppStore';
 import { GuestItem } from './GuestItem';
 import type { Guest } from '@/types/guest';
@@ -8,9 +9,43 @@ interface GuestGroupProps {
   guests: Guest[];
   onDragHandleStart?: () => void;
   onDragHandleEnd?: () => void;
+  selectedGuestIds?: Set<string>;
+  onGuestSelect?: (guestId: string, e: React.MouseEvent) => void;
 }
 
-function PartyGroupedGuests({ guests }: { guests: Guest[] }) {
+function GroupDropTarget({ groupName, children }: { groupName: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `group-drop-${groupName}`,
+    data: { type: 'group', groupName },
+  });
+  return (
+    <div ref={setNodeRef} className={isOver ? 'ring-2 ring-teal-400 rounded' : ''}>
+      {children}
+    </div>
+  );
+}
+
+function SubgroupDropTarget({ groupName, subgroupName, children }: { groupName: string; subgroupName: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `subgroup-drop-${groupName}-${subgroupName}`,
+    data: { type: 'subgroup', groupName, subgroupName },
+  });
+  return (
+    <div ref={setNodeRef} className={isOver ? 'ring-1 ring-teal-400 rounded' : ''}>
+      {children}
+    </div>
+  );
+}
+
+function PartyGroupedGuests({
+  guests,
+  selectedGuestIds,
+  onGuestSelect,
+}: {
+  guests: Guest[];
+  selectedGuestIds?: Set<string>;
+  onGuestSelect?: (guestId: string, e: React.MouseEvent) => void;
+}) {
   const parties = useAppStore((s) => s.parties);
   const lockParty = useAppStore((s) => s.lockParty);
   const unlockParty = useAppStore((s) => s.unlockParty);
@@ -54,7 +89,12 @@ function PartyGroupedGuests({ guests }: { guests: Guest[] }) {
               </div>
             )}
             {partyGuests.map((g) => (
-              <GuestItem key={g.id} guest={g} />
+              <GuestItem
+                key={g.id}
+                guest={g}
+                isSelected={selectedGuestIds?.has(g.id)}
+                onSelect={(e) => onGuestSelect?.(g.id, e)}
+              />
             ))}
           </div>
         );
@@ -63,17 +103,15 @@ function PartyGroupedGuests({ guests }: { guests: Guest[] }) {
   );
 }
 
-export function GuestGroup({ groupName, guests, onDragHandleStart, onDragHandleEnd }: GuestGroupProps) {
+export function GuestGroup({ groupName, guests, onDragHandleStart, onDragHandleEnd, selectedGuestIds, onGuestSelect }: GuestGroupProps) {
   const collapsedGroups = useAppStore((s) => s.collapsedGroups);
   const toggleGroupCollapsed = useAppStore((s) => s.toggleGroupCollapsed);
   const subgroupOrder = useAppStore((s) => s.subgroupOrder);
   const addSubgroup = useAppStore((s) => s.addSubgroup);
   const removeSubgroup = useAppStore((s) => s.removeSubgroup);
-  const setGuestSubgroup = useAppStore((s) => s.setGuestSubgroup);
 
   const [showAddSubgroup, setShowAddSubgroup] = useState(false);
   const [newSubgroupName, setNewSubgroupName] = useState('');
-  const [dropTarget, setDropTarget] = useState<string | null>(null); // subgroup name or 'unassigned'
 
   const isCollapsed = collapsedGroups.includes(groupName);
   const unseatedCount = guests.filter((g) => g.tableId === null).length;
@@ -91,52 +129,41 @@ export function GuestGroup({ groupName, guests, onDragHandleStart, onDragHandleE
     setShowAddSubgroup(false);
   }
 
-  function handleSubgroupDrop(e: React.DragEvent, targetSubgroup: string | null) {
-    e.preventDefault();
-    const guestId = e.dataTransfer.getData('subgroupDragGuestId');
-    if (guestId) setGuestSubgroup(guestId, targetSubgroup);
-    setDropTarget(null);
-  }
-
-  function handleSubgroupDragOver(e: React.DragEvent, name: string) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    setDropTarget(name);
-  }
-
   return (
     <div className="mb-2">
       <div className="border-t border-gray-200 mb-2" />
 
-      {/* Group header with drag handle */}
-      <div className="flex items-stretch">
-        {/* Drag handle */}
-        <div
-          draggable
-          className="flex items-center px-1.5 cursor-grab text-gray-300 hover:text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-l transition-colors select-none"
-          title="Drag to reorder group"
-          onPointerDown={(e) => e.stopPropagation()}
-          onDragStart={(e) => {
-            e.stopPropagation();
-            onDragHandleStart?.();
-          }}
-          onDragEnd={onDragHandleEnd}
-        >
-          ⠿
-        </div>
+      {/* Group header with drag handle — wrapped in GroupDropTarget */}
+      <GroupDropTarget groupName={groupName}>
+        <div className="flex items-stretch">
+          {/* Drag handle */}
+          <div
+            draggable
+            className="flex items-center px-1.5 cursor-grab text-gray-300 hover:text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-l transition-colors select-none"
+            title="Drag to reorder group"
+            onPointerDown={(e) => e.stopPropagation()}
+            onDragStart={(e) => {
+              e.stopPropagation();
+              onDragHandleStart?.();
+            }}
+            onDragEnd={onDragHandleEnd}
+          >
+            ⠿
+          </div>
 
-        {/* Collapse toggle button */}
-        <button
-          onClick={() => toggleGroupCollapsed(groupName)}
-          className="flex-1 flex items-center gap-1.5 px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-r text-left transition-colors"
-        >
-          <span className="text-gray-500 text-xs">{isCollapsed ? '▶' : '▼'}</span>
-          <span className="font-semibold text-sm text-gray-700 flex-1 truncate">{groupName}</span>
-          <span className="text-xs text-gray-400 shrink-0">
-            {unseatedCount}/{total} unseated
-          </span>
-        </button>
-      </div>
+          {/* Collapse toggle button */}
+          <button
+            onClick={() => toggleGroupCollapsed(groupName)}
+            className="flex-1 flex items-center gap-1.5 px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-r text-left transition-colors"
+          >
+            <span className="text-gray-500 text-xs">{isCollapsed ? '▶' : '▼'}</span>
+            <span className="font-semibold text-sm text-gray-700 flex-1 truncate">{groupName}</span>
+            <span className="text-xs text-gray-400 shrink-0">
+              {unseatedCount}/{total} unseated
+            </span>
+          </button>
+        </div>
+      </GroupDropTarget>
 
       {!isCollapsed && (
         <div className="mt-1 space-y-0.5">
@@ -145,43 +172,34 @@ export function GuestGroup({ groupName, guests, onDragHandleStart, onDragHandleE
               {/* Sub-group sections */}
               {subgroups.map((sg) => {
                 const sgGuests = guests.filter((g) => g.subgroup === sg);
-                const isTarget = dropTarget === sg;
                 return (
                   <div key={sg}>
                     {/* Sub-group header — drop target */}
-                    <div
-                      className={[
-                        'flex items-center gap-1 px-2 py-1 mx-1 rounded text-[11px] font-semibold text-gray-500 transition-colors',
-                        isTarget ? 'bg-teal-100 text-teal-700' : 'bg-gray-50',
-                      ].join(' ')}
-                      onDragOver={(e) => handleSubgroupDragOver(e, sg)}
-                      onDragLeave={() => setDropTarget(null)}
-                      onDrop={(e) => handleSubgroupDrop(e, sg)}
-                    >
-                      <span className="flex-1 truncate">{sg}</span>
-                      <button
-                        onClick={() => removeSubgroup(groupName, sg)}
-                        className="opacity-0 hover:opacity-100 text-gray-300 hover:text-red-400 transition-all"
-                        title={`Delete sub-group "${sg}"`}
-                        onPointerDown={(e) => e.stopPropagation()}
-                      >
-                        <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
-                        </svg>
-                      </button>
-                    </div>
-                    {sgGuests.length > 0 ? (
-                      <PartyGroupedGuests guests={sgGuests} />
-                    ) : (
+                    <SubgroupDropTarget groupName={groupName} subgroupName={sg}>
                       <div
-                        className={[
-                          'mx-3 py-1.5 text-[10px] text-center rounded border border-dashed transition-colors',
-                          isTarget ? 'border-teal-400 text-teal-500 bg-teal-50' : 'border-gray-200 text-gray-300',
-                        ].join(' ')}
-                        onDragOver={(e) => handleSubgroupDragOver(e, sg)}
-                        onDragLeave={() => setDropTarget(null)}
-                        onDrop={(e) => handleSubgroupDrop(e, sg)}
+                        className="flex items-center gap-1 px-2 py-1 mx-1 rounded text-[11px] font-semibold text-gray-500 transition-colors bg-gray-50"
                       >
+                        <span className="flex-1 truncate">{sg}</span>
+                        <button
+                          onClick={() => removeSubgroup(groupName, sg)}
+                          className="opacity-0 hover:opacity-100 text-gray-300 hover:text-red-400 transition-all"
+                          title={`Delete sub-group "${sg}"`}
+                          onPointerDown={(e) => e.stopPropagation()}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+                          </svg>
+                        </button>
+                      </div>
+                    </SubgroupDropTarget>
+                    {sgGuests.length > 0 ? (
+                      <PartyGroupedGuests
+                        guests={sgGuests}
+                        selectedGuestIds={selectedGuestIds}
+                        onGuestSelect={onGuestSelect}
+                      />
+                    ) : (
+                      <div className="mx-3 py-1.5 text-[10px] text-center rounded border border-dashed transition-colors border-gray-200 text-gray-300">
                         Drop guests here
                       </div>
                     )}
@@ -192,29 +210,28 @@ export function GuestGroup({ groupName, guests, onDragHandleStart, onDragHandleE
               {/* Unassigned section */}
               {(() => {
                 const unassigned = guests.filter((g) => g.subgroup === null || !subgroups.includes(g.subgroup));
-                const isTarget = dropTarget === 'unassigned';
-                if (unassigned.length === 0 && !isTarget) return null;
+                if (unassigned.length === 0) return null;
                 return (
                   <div>
-                    <div
-                      className={[
-                        'flex items-center gap-1 px-2 py-1 mx-1 rounded text-[11px] font-semibold transition-colors',
-                        isTarget ? 'bg-gray-200 text-gray-600' : 'text-gray-400',
-                      ].join(' ')}
-                      onDragOver={(e) => handleSubgroupDragOver(e, 'unassigned')}
-                      onDragLeave={() => setDropTarget(null)}
-                      onDrop={(e) => handleSubgroupDrop(e, null)}
-                    >
+                    <div className="flex items-center gap-1 px-2 py-1 mx-1 rounded text-[11px] font-semibold transition-colors text-gray-400">
                       Unassigned
                     </div>
-                    <PartyGroupedGuests guests={unassigned} />
+                    <PartyGroupedGuests
+                      guests={unassigned}
+                      selectedGuestIds={selectedGuestIds}
+                      onGuestSelect={onGuestSelect}
+                    />
                   </div>
                 );
               })()}
             </>
           ) : (
             /* Original party-grouped layout when no sub-groups */
-            <PartyGroupedGuests guests={guests} />
+            <PartyGroupedGuests
+              guests={guests}
+              selectedGuestIds={selectedGuestIds}
+              onGuestSelect={onGuestSelect}
+            />
           )}
 
           {/* Add sub-group */}

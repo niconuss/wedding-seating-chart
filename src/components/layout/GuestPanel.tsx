@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { GuestGroup } from '@/components/guests/GuestGroup';
 import { UploadModal } from '@/components/modals/UploadModal';
@@ -11,12 +11,16 @@ export function GuestPanel() {
   const checkpoint = useAppStore((s) => s.checkpoint);
   const groupOrder = useAppStore((s) => s.groupOrder);
   const reorderGroups = useAppStore((s) => s.reorderGroups);
+  const sidebarSelectedIds = useAppStore((s) => s.sidebarSelectedIds);
+  const setSidebarSelectedIds = useAppStore((s) => s.setSidebarSelectedIds);
 
   const [showUpload, setShowUpload] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [newGroup, setNewGroup] = useState('');
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [lastClickedId, setLastClickedId] = useState<string | null>(null);
 
   // Group drag state
   const [draggedGroup, setDraggedGroup] = useState<string | null>(null);
@@ -25,8 +29,12 @@ export function GuestPanel() {
   const canvasGuestIds = new Set(canvasGuests.map((cg) => cg.guestId));
   const sidebarGuests = guests.filter((g) => !canvasGuestIds.has(g.id));
 
+  const filteredSidebarGuests = searchQuery
+    ? sidebarGuests.filter((g) => g.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    : sidebarGuests;
+
   const groupMap = new Map<string, typeof guests>();
-  for (const guest of sidebarGuests) {
+  for (const guest of filteredSidebarGuests) {
     if (!groupMap.has(guest.group)) groupMap.set(guest.group, []);
     groupMap.get(guest.group)!.push(guest);
   }
@@ -38,14 +46,52 @@ export function GuestPanel() {
     ...allGroupNames.filter((g) => !groupOrder.includes(g)).sort(),
   ];
 
-  const existingGroups = allGroupNames.sort();
+  const existingGroups = [...new Set(sidebarGuests.map((g) => g.group))].sort();
   const totalGuests = guests.length;
   const seatedGuests = guests.filter((g) => g.tableId !== null).length;
   // Canvas guests are neither seated nor shown in sidebar
 
+  const selectedSet = useMemo(() => new Set(sidebarSelectedIds), [sidebarSelectedIds]);
+
+  // Flat list of guest IDs in visual order for range selection
+  const flatSidebarGuestIds = useMemo(() => {
+    const result: string[] = [];
+    for (const group of orderedGroups) {
+      const grGuests = groupMap.get(group) ?? [];
+      const seen = new Set<string>();
+      const partyOrder: string[] = [];
+      for (const g of grGuests) {
+        if (!seen.has(g.partyId)) { seen.add(g.partyId); partyOrder.push(g.partyId); }
+      }
+      for (const partyId of partyOrder) {
+        for (const g of grGuests.filter((g) => g.partyId === partyId)) result.push(g.id);
+      }
+    }
+    return result;
+  }, [orderedGroups, groupMap]);
+
   useEffect(() => {
     if (showAddForm) nameInputRef.current?.focus();
   }, [showAddForm]);
+
+  function handleGuestSelect(guestId: string, e: React.MouseEvent) {
+    if (e.shiftKey && lastClickedId && flatSidebarGuestIds.includes(lastClickedId)) {
+      const startIdx = flatSidebarGuestIds.indexOf(lastClickedId);
+      const endIdx = flatSidebarGuestIds.indexOf(guestId);
+      if (startIdx >= 0 && endIdx >= 0) {
+        const [lo, hi] = startIdx <= endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+        setSidebarSelectedIds(flatSidebarGuestIds.slice(lo, hi + 1));
+      }
+    } else {
+      if (sidebarSelectedIds.length === 1 && sidebarSelectedIds[0] === guestId) {
+        setSidebarSelectedIds([]);
+        setLastClickedId(null);
+      } else {
+        setSidebarSelectedIds([guestId]);
+        setLastClickedId(guestId);
+      }
+    }
+  }
 
   function handleAddGuest(e: React.FormEvent) {
     e.preventDefault();
@@ -87,6 +133,27 @@ export function GuestPanel() {
   return (
     <div className="w-64 shrink-0 h-full bg-white border-r border-gray-200 flex flex-col">
       <PagesPanel />
+
+      {/* Search bar */}
+      <div className="px-2 py-1.5 border-b border-gray-100">
+        <div className="relative">
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search guests…"
+            className="w-full text-xs px-2 pr-6 py-1.5 border border-gray-200 rounded-md outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-100"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs leading-none"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Header */}
       <div className="p-3 border-b border-gray-200 flex items-center justify-between shrink-0">
         <div>
@@ -137,6 +204,8 @@ export function GuestPanel() {
                   guests={groupGuests}
                   onDragHandleStart={() => setDraggedGroup(group)}
                   onDragHandleEnd={() => { setDraggedGroup(null); setDragOverIdx(null); }}
+                  selectedGuestIds={selectedSet}
+                  onGuestSelect={handleGuestSelect}
                 />
               </div>
             );

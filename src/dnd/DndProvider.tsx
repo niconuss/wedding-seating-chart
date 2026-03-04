@@ -17,6 +17,7 @@ export interface DragData {
   partyMemberIds?: string[];
   isLocked?: boolean;
   source?: 'canvas';
+  multiSelectIds?: string[];
 }
 
 
@@ -27,6 +28,9 @@ export function AppDndProvider({ children }: { children: React.ReactNode }) {
     seatGuest, seatGuestAtTable, unseatGuest,
     setActiveError, checkpoint,
     placeGuestOnCanvas, moveCanvasGuest, removeGuestFromCanvas,
+    placeMultipleGuestsOnCanvas,
+    setSidebarSelectedIds,
+    setGuestGroup, setGuestsSubgroup,
     canvasTransform,
   } = useAppStore();
   const [activeGuestId, setActiveGuestId] = useState<string | null>(null);
@@ -72,18 +76,61 @@ export function AppDndProvider({ children }: { children: React.ReactNode }) {
       if (dragData.source === 'canvas') {
         // Repositioning a canvas guest — just move it
         moveCanvasGuest(guestId, canvasX, canvasY);
+      } else if (dragData.multiSelectIds && dragData.multiSelectIds.length > 1) {
+        const ids = dragData.multiSelectIds;
+        const COLS = Math.min(ids.length, 4);
+        const HSPACING = 175;
+        const VSPACING = 65;
+        checkpoint();
+        const placements = ids.map((id, i) => {
+          const col = i % COLS;
+          const row = Math.floor(i / COLS);
+          const rowCount = Math.min(COLS, ids.length - row * COLS);
+          return {
+            guestId: id,
+            x: canvasX + (col - (rowCount - 1) / 2) * HSPACING,
+            y: canvasY + row * VSPACING,
+          };
+        });
+        placeMultipleGuestsOnCanvas(placements);
       } else {
         // Any guest dragged to empty canvas → park as floating chip
+        checkpoint();
         placeGuestOnCanvas(guestId, canvasX, canvasY);
       }
       return;
     }
 
-    // ── Drop on a seat droppable ─────────────────────────────────────────────
-    const dropData = over.data.current as { tableId: string; seatIndex: number } | undefined;
+    // ── Drop on a droppable ──────────────────────────────────────────────────
+    const dropData = over.data.current as
+      | { type?: undefined; tableId: string; seatIndex: number }
+      | { type: 'group'; groupName: string }
+      | { type: 'subgroup'; groupName: string; subgroupName: string }
+      | undefined;
+
     if (!dropData) return;
 
-    const { tableId, seatIndex } = dropData;
+    // Group reassignment drop
+    if (dropData.type === 'group') {
+      const guestIds = dragData.multiSelectIds ?? [guestId];
+      checkpoint();
+      setGuestGroup(guestIds, dropData.groupName);
+      setSidebarSelectedIds([]);
+      return;
+    }
+
+    // Subgroup assignment drop
+    if (dropData.type === 'subgroup') {
+      const guestIds = dragData.multiSelectIds ?? [guestId];
+      checkpoint();
+      setGuestsSubgroup(guestIds, dropData.subgroupName);
+      setGuestGroup(guestIds, dropData.groupName);
+      setSidebarSelectedIds([]);
+      return;
+    }
+
+    // Otherwise it's a seat drop — existing seat logic follows
+    const { tableId, seatIndex } = dropData as { tableId: string; seatIndex: number };
     const table = tables.find((t) => t.id === tableId);
     if (!table) return;
 
@@ -121,6 +168,7 @@ export function AppDndProvider({ children }: { children: React.ReactNode }) {
         seatGuest(a.guestId, a.tableId, a.seatIndex);
         seatGuestAtTable(a.tableId, a.seatIndex, a.guestId);
       }
+      setSidebarSelectedIds([]);
     } else {
       // Single guest drop
       const guest = guests.find((g) => g.id === guestId);
@@ -158,6 +206,7 @@ export function AppDndProvider({ children }: { children: React.ReactNode }) {
         seatGuest(guestId, tableId, seatIndex);
         seatGuestAtTable(tableId, seatIndex, guestId);
       }
+      setSidebarSelectedIds([]);
     }
   }
 
