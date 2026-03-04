@@ -19,6 +19,19 @@ const LOCALSTORAGE_KEY = 'wedding-seating-chart';
 
 let isReceivingUpdate = false;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSnapshot: PersistedState | null = null;
+// Suppress own-write echoes for 3s after writing to Firestore
+let suppressNotificationsUntil = 0;
+
+/** Called by the UI when the user clicks "Load changes" */
+export function applyPendingUpdate() {
+  if (!pendingSnapshot) return;
+  isReceivingUpdate = true;
+  useAppStore.getState().loadRemoteState(pendingSnapshot);
+  useAppStore.getState().clearPendingUpdateFlag();
+  pendingSnapshot = null;
+  isReceivingUpdate = false;
+}
 
 export async function initFirebaseSync() {
   if (!import.meta.env.VITE_FIREBASE_PROJECT_ID) {
@@ -55,12 +68,21 @@ export async function initFirebaseSync() {
       isReceivingUpdate = false;
     }
 
-    // Listen for remote updates (fires immediately on subscribe, then on each change)
+    // Listen for remote updates — first fire is always the initial state, skip it
+    let isFirstSnapshot = true;
     onSnapshot(chartRef, (snapshot) => {
       if (!snapshot.exists()) return;
-      isReceivingUpdate = true;
-      useAppStore.getState().loadRemoteState(snapshot.data() as PersistedState);
-      isReceivingUpdate = false;
+
+      if (isFirstSnapshot) {
+        isFirstSnapshot = false;
+        return;
+      }
+
+      // Suppress echoes from our own writes for 3 seconds
+      if (Date.now() < suppressNotificationsUntil) return;
+
+      pendingSnapshot = snapshot.data() as PersistedState;
+      useAppStore.getState().setHasRemoteUpdate(Date.now());
     });
 
     // Write local changes to Firestore (debounced 500ms)
@@ -77,10 +99,12 @@ export async function initFirebaseSync() {
         for (const key of PERSISTED_KEYS) {
           (data as Record<string, unknown>)[key] = s[key];
         }
+        suppressNotificationsUntil = Date.now() + 3000;
         try {
           await setDoc(chartRef, data);
         } catch (e) {
           console.error('Firebase: write failed', e);
+          suppressNotificationsUntil = 0;
         }
       }, 500);
     });

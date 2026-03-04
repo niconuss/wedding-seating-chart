@@ -3,6 +3,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { useCanvasPanZoom } from '@/hooks/useCanvasPanZoom';
 import { TableCanvas } from '@/components/tables/TableCanvas';
 import { tableBounds } from '@/utils/geometry';
+import { RemoteUpdateBanner } from '@/components/RemoteUpdateBanner';
 
 export function CanvasArea() {
   const canvasTransform = useAppStore((s) => s.canvasTransform);
@@ -12,26 +13,42 @@ export function CanvasArea() {
   const renameTable = useAppStore((s) => s.renameTable);
   const checkpoint = useAppStore((s) => s.checkpoint);
 
-  // On mount: fit all tables into view
+  // On mount: fit all tables into view. Tables may arrive async from Firebase,
+  // so subscribe and fit on first non-empty load.
   useEffect(() => {
-    const initialTables = useAppStore.getState().tables;
-    if (initialTables.length === 0) return;
-    const el = document.getElementById('canvas-area');
-    if (!el) return;
-    const { width: W, height: H } = el.getBoundingClientRect();
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const t of initialTables) {
-      const b = tableBounds(t);
-      if (b.left   < minX) minX = b.left;
-      if (b.top    < minY) minY = b.top;
-      if (b.right  > maxX) maxX = b.right;
-      if (b.bottom > maxY) maxY = b.bottom;
+    function fitTables(tbls: typeof tables) {
+      const el = document.getElementById('canvas-area');
+      if (!el || tbls.length === 0) return;
+      const { width: W, height: H } = el.getBoundingClientRect();
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const t of tbls) {
+        const b = tableBounds(t);
+        if (b.left   < minX) minX = b.left;
+        if (b.top    < minY) minY = b.top;
+        if (b.right  > maxX) maxX = b.right;
+        if (b.bottom > maxY) maxY = b.bottom;
+      }
+      const PAD = 48;
+      const scale = Math.min(W / (maxX - minX + PAD * 2), H / (maxY - minY + PAD * 2), 1);
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      setCanvasTransform({ x: W / 2 - cx * scale, y: H / 2 - cy * scale, scale });
     }
-    const PAD = 48;
-    const scale = Math.min(W / (maxX - minX + PAD * 2), H / (maxY - minY + PAD * 2), 1);
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    setCanvasTransform({ x: W / 2 - cx * scale, y: H / 2 - cy * scale, scale });
+
+    const current = useAppStore.getState().tables;
+    if (current.length > 0) {
+      fitTables(current);
+      return;
+    }
+
+    // Tables not yet loaded (Firebase async) — wait for first non-empty update
+    const unsub = useAppStore.subscribe((state, prev) => {
+      if (prev.tables.length === 0 && state.tables.length > 0) {
+        fitTables(state.tables);
+        unsub();
+      }
+    });
+    return unsub;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleAutoRename() {
@@ -157,6 +174,8 @@ export function CanvasArea() {
       >
         <TableCanvas />
       </div>
+
+      <RemoteUpdateBanner />
 
       {/* Auto-rename button */}
       {tables.length > 0 && (

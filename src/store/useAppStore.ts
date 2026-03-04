@@ -75,6 +75,9 @@ export interface AppState {
     groupOrder?: string[];
     subgroupOrder?: Record<string, string[]>;
   }) => void;
+  pendingRemoteUpdate: number | null; // timestamp (ms) when a remote update arrived
+  setHasRemoteUpdate: (at: number) => void;
+  clearPendingUpdateFlag: () => void;
 
   // UI actions
   setCanvasTransform: (t: { x: number; y: number; scale: number }) => void;
@@ -133,6 +136,7 @@ export const useAppStore = create<AppState>()(
         alignmentGuides: { x: null, y: null },
         canUndo: false,
         canRedo: false,
+        pendingRemoteUpdate: null,
 
         checkpoint: () => {
           const { guests, parties, tables } = get();
@@ -245,6 +249,16 @@ export const useAppStore = create<AppState>()(
             }
             const gIdx = draft.guests.findIndex((g) => g.id === guestId);
             if (gIdx >= 0) draft.guests.splice(gIdx, 1);
+          });
+        },
+
+        unseatAllAtTable: (tableId: string) => {
+          set((draft) => {
+            for (const g of draft.guests) {
+              if (g.tableId === tableId) { g.tableId = null; g.seatIndex = null; }
+            }
+            const t = draft.tables.find((t) => t.id === tableId);
+            if (t) { for (const s of t.seats) s.guestId = null; }
           });
         },
 
@@ -378,6 +392,11 @@ export const useAppStore = create<AppState>()(
             if (data.groupOrder !== undefined) draft.groupOrder = data.groupOrder;
             if (data.subgroupOrder !== undefined) draft.subgroupOrder = data.subgroupOrder;
           }),
+
+        setHasRemoteUpdate: (at) =>
+          set((draft) => { draft.pendingRemoteUpdate = at; }),
+        clearPendingUpdateFlag: () =>
+          set((draft) => { draft.pendingRemoteUpdate = null; }),
       };
     })
 );
