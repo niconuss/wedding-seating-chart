@@ -2,7 +2,6 @@ import { useDraggable } from '@dnd-kit/core';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppStore } from '@/store/useAppStore';
-import { seatPosition } from '@/utils/geometry';
 import type { DragData } from '@/dnd/DndProvider';
 
 interface SeatedGuestChipProps {
@@ -16,9 +15,9 @@ interface SeatedGuestChipProps {
 export function SeatedGuestChip({ guestId, tableId, seatIndex, style, labelAbove }: SeatedGuestChipProps) {
   const guests = useAppStore((s) => s.guests);
   const parties = useAppStore((s) => s.parties);
-  const tables = useAppStore((s) => s.tables);
   const checkpoint = useAppStore((s) => s.checkpoint);
-  const placeGuestOnCanvas = useAppStore((s) => s.placeGuestOnCanvas);
+  const unseatGuest = useAppStore((s) => s.unseatGuest);
+  const seatGuestAtTable = useAppStore((s) => s.seatGuestAtTable);
 
   const guest = guests.find((g) => g.id === guestId);
   const party = guest ? parties.find((p) => p.id === guest.partyId) : undefined;
@@ -42,11 +41,8 @@ export function SeatedGuestChip({ guestId, tableId, seatIndex, style, labelAbove
   function handleRemove(e: React.MouseEvent) {
     e.stopPropagation();
     checkpoint();
-    const table = tables.find((t) => t.id === tableId);
-    if (table) {
-      const pos = seatPosition(table.type, seatIndex, table.seats.length);
-      placeGuestOnCanvas(guestId, table.x + pos.x, table.y + pos.y);
-    }
+    unseatGuest(guestId);
+    seatGuestAtTable(tableId, seatIndex, null);
   }
   const parts = guest.name.split(' ');
 
