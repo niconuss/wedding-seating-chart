@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { GuestGroup } from '@/components/guests/GuestGroup';
 import { UploadModal } from '@/components/modals/UploadModal';
+import { PagesPanel } from './PagesPanel';
 
 export function GuestPanel() {
   const guests = useAppStore((s) => s.guests);
@@ -80,6 +81,7 @@ export function GuestPanel() {
 
   return (
     <div className="w-64 shrink-0 h-full bg-white border-r border-gray-200 flex flex-col">
+      <PagesPanel />
       {/* Header */}
       <div className="p-3 border-b border-gray-200 flex items-center justify-between shrink-0">
         <div>

@@ -4,6 +4,7 @@ import type { Guest } from '@/types/guest';
 import type { Party } from '@/types/party';
 import type { Table } from '@/types/table';
 import type { Version } from '@/types/version';
+import type { Page } from '@/types/page';
 import { createGuestSlice } from './guestSlice';
 import { createPartySlice } from './partySlice';
 import { createTableSlice } from './tableSlice';
@@ -20,6 +21,10 @@ export interface AppState {
   versions: Version[];
   groupOrder: string[];
   subgroupOrder: Record<string, string[]>;
+  // Pages
+  pages: Page[];
+  currentPageId: string;
+  canvasGuests: { guestId: string; x: number; y: number }[];
   // UI (not persisted)
   canvasTransform: { x: number; y: number; scale: number };
   activeError: string | null;
@@ -66,6 +71,19 @@ export interface AppState {
   loadVersion: (versionId: string) => void;
   deleteVersion: (versionId: string) => void;
 
+  // Page actions
+  createPage: (name?: string, initialData?: Omit<Page, 'id' | 'name'>) => void;
+  switchPage: (pageId: string) => void;
+  renamePage: (pageId: string, name: string) => void;
+  deletePage: (pageId: string) => void;
+  duplicatePage: (pageId: string) => void;
+  initPage: (name: string) => void;
+
+  // Canvas guest actions
+  placeGuestOnCanvas: (guestId: string, x: number, y: number) => void;
+  moveCanvasGuest: (guestId: string, x: number, y: number) => void;
+  removeGuestFromCanvas: (guestId: string) => void;
+
   // Firebase sync
   loadRemoteState: (data: {
     guests?: Guest[];
@@ -74,6 +92,7 @@ export interface AppState {
     versions?: Version[];
     groupOrder?: string[];
     subgroupOrder?: Record<string, string[]>;
+    pages?: Page[];
   }) => void;
   pendingRemoteUpdate: number | null; // timestamp (ms) when a remote update arrived
   setHasRemoteUpdate: (at: number) => void;
@@ -105,6 +124,41 @@ type Snapshot = { tables: Table[]; guests: Guest[]; parties: Party[] };
 const _history: Snapshot[] = [];
 const _redoStack: Snapshot[] = [];
 
+// ── Page helpers (called inside immer set callbacks) ──────────────────────────
+function snapshotCurrentPage(draft: AppState) {
+  const idx = draft.pages.findIndex((p) => p.id === draft.currentPageId);
+  if (idx < 0) return;
+  const seating: Record<string, { tableId: string | null; seatIndex: number | null }> = {};
+  for (const g of draft.guests) seating[g.id] = { tableId: g.tableId, seatIndex: g.seatIndex };
+  draft.pages[idx].tables = JSON.parse(JSON.stringify(draft.tables));
+  draft.pages[idx].guestSeating = seating;
+  draft.pages[idx].canvasGuests = JSON.parse(JSON.stringify(draft.canvasGuests));
+}
+
+function applyPage(draft: AppState, page: Page) {
+  draft.currentPageId = page.id;
+  draft.tables = JSON.parse(JSON.stringify(page.tables));
+  draft.canvasGuests = JSON.parse(JSON.stringify(page.canvasGuests));
+  // Reset all seats
+  for (const t of draft.tables) {
+    for (const s of t.seats) s.guestId = null;
+  }
+  // Reset guest seating
+  for (const g of draft.guests) { g.tableId = null; g.seatIndex = null; }
+  // Apply seating from page
+  for (const [guestId, seating] of Object.entries(page.guestSeating)) {
+    const g = draft.guests.find((g) => g.id === guestId);
+    if (g) { g.tableId = seating.tableId; g.seatIndex = seating.seatIndex; }
+    if (seating.tableId && seating.seatIndex !== null) {
+      const t = draft.tables.find((t) => t.id === seating.tableId);
+      if (t) {
+        const seat = t.seats.find((s) => s.index === seating.seatIndex);
+        if (seat) seat.guestId = guestId;
+      }
+    }
+  }
+}
+
 export const useAppStore = create<AppState>()(
   immer((set, get) => {
       const guestSlice = createGuestSlice(set as Parameters<typeof createGuestSlice>[0]);
@@ -123,6 +177,11 @@ export const useAppStore = create<AppState>()(
         // Persisted ordering state
         groupOrder: [],
         subgroupOrder: {},
+
+        // Pages state
+        pages: [],
+        currentPageId: '',
+        canvasGuests: [],
 
         // UI state (not in slices, not persisted)
         canvasTransform: { x: 0, y: 0, scale: 1 },
@@ -237,6 +296,8 @@ export const useAppStore = create<AppState>()(
                 if (s.guestId === guestId) s.guestId = null;
               }
             }
+            // Remove from canvas guests
+            draft.canvasGuests = draft.canvasGuests.filter((cg) => cg.guestId !== guestId);
             // Remove from party
             const party = draft.parties.find((p) => p.id === g.partyId);
             if (party) {
@@ -333,6 +394,106 @@ export const useAppStore = create<AppState>()(
           versionSlice.deleteVersion(versionId);
         },
 
+        // ── Page actions ─────────────────────────────────────────────────────────
+
+        createPage: (name?: string, initialData?: Omit<Page, 'id' | 'name'>) => set((draft) => {
+          snapshotCurrentPage(draft);
+          const newPage: Page = {
+            id: nanoid(),
+            name: name ?? `Page ${draft.pages.length + 1}`,
+            tables: initialData ? JSON.parse(JSON.stringify(initialData.tables)) : [],
+            guestSeating: initialData ? JSON.parse(JSON.stringify(initialData.guestSeating)) : {},
+            canvasGuests: initialData ? JSON.parse(JSON.stringify(initialData.canvasGuests)) : [],
+          };
+          draft.pages.push(newPage);
+          applyPage(draft, newPage);
+        }),
+
+        switchPage: (pageId: string) => set((draft) => {
+          if (draft.currentPageId === pageId) return;
+          snapshotCurrentPage(draft);
+          const newPage = draft.pages.find((p) => p.id === pageId);
+          if (!newPage) return;
+          applyPage(draft, newPage);
+        }),
+
+        renamePage: (pageId: string, name: string) => set((draft) => {
+          const page = draft.pages.find((p) => p.id === pageId);
+          if (page) page.name = name;
+        }),
+
+        deletePage: (pageId: string) => set((draft) => {
+          if (draft.pages.length <= 1) return;
+          const idx = draft.pages.findIndex((p) => p.id === pageId);
+          if (idx < 0) return;
+          const wasActive = draft.currentPageId === pageId;
+          draft.pages.splice(idx, 1);
+          if (wasActive) {
+            const newIdx = Math.min(idx, draft.pages.length - 1);
+            applyPage(draft, draft.pages[newIdx]);
+          }
+        }),
+
+        duplicatePage: (pageId: string) => set((draft) => {
+          snapshotCurrentPage(draft);
+          const sourcePage = draft.pages.find((p) => p.id === pageId);
+          if (!sourcePage) return;
+          const newPage: Page = {
+            id: nanoid(),
+            name: `${sourcePage.name} (copy)`,
+            tables: JSON.parse(JSON.stringify(sourcePage.tables)),
+            guestSeating: JSON.parse(JSON.stringify(sourcePage.guestSeating)),
+            canvasGuests: JSON.parse(JSON.stringify(sourcePage.canvasGuests)),
+          };
+          const sourceIdx = draft.pages.findIndex((p) => p.id === pageId);
+          draft.pages.splice(sourceIdx + 1, 0, newPage);
+          applyPage(draft, newPage);
+        }),
+
+        // Creates a page from current tables/guests without switching (for migration)
+        initPage: (name: string) => set((draft) => {
+          if (draft.pages.length > 0) return;
+          const seating: Record<string, { tableId: string | null; seatIndex: number | null }> = {};
+          for (const g of draft.guests) seating[g.id] = { tableId: g.tableId, seatIndex: g.seatIndex };
+          const newPage: Page = {
+            id: nanoid(),
+            name,
+            tables: JSON.parse(JSON.stringify(draft.tables)),
+            guestSeating: seating,
+            canvasGuests: [],
+          };
+          draft.pages.push(newPage);
+          draft.currentPageId = newPage.id;
+        }),
+
+        // ── Canvas guest actions ─────────────────────────────────────────────────
+
+        placeGuestOnCanvas: (guestId: string, x: number, y: number) => set((draft) => {
+          draft.canvasGuests = draft.canvasGuests.filter((cg) => cg.guestId !== guestId);
+          const g = draft.guests.find((g) => g.id === guestId);
+          if (g) {
+            if (g.tableId && g.seatIndex !== null) {
+              const t = draft.tables.find((t) => t.id === g.tableId);
+              if (t) {
+                const seat = t.seats.find((s) => s.index === g.seatIndex);
+                if (seat) seat.guestId = null;
+              }
+            }
+            g.tableId = null;
+            g.seatIndex = null;
+          }
+          draft.canvasGuests.push({ guestId, x, y });
+        }),
+
+        moveCanvasGuest: (guestId: string, x: number, y: number) => set((draft) => {
+          const cg = draft.canvasGuests.find((cg) => cg.guestId === guestId);
+          if (cg) { cg.x = x; cg.y = y; }
+        }),
+
+        removeGuestFromCanvas: (guestId: string) => set((draft) => {
+          draft.canvasGuests = draft.canvasGuests.filter((cg) => cg.guestId !== guestId);
+        }),
+
         setCanvasTransform: (t) =>
           set((draft) => {
             draft.canvasTransform = t;
@@ -387,10 +548,21 @@ export const useAppStore = create<AppState>()(
           set((draft) => {
             if (data.guests !== undefined) draft.guests = data.guests;
             if (data.parties !== undefined) draft.parties = data.parties;
-            if (data.tables !== undefined) draft.tables = data.tables;
             if (data.versions !== undefined) draft.versions = data.versions;
             if (data.groupOrder !== undefined) draft.groupOrder = data.groupOrder;
             if (data.subgroupOrder !== undefined) draft.subgroupOrder = data.subgroupOrder;
+
+            if (data.pages !== undefined && data.pages.length > 0) {
+              draft.pages = data.pages;
+              // Find current page or default to first
+              let page = draft.pages.find((p) => p.id === draft.currentPageId);
+              if (!page) page = draft.pages[0];
+              if (page) applyPage(draft, page);
+            } else if (data.tables !== undefined) {
+              // Legacy migration: tables present but no pages yet
+              // firebaseSync will call initPage() after this
+              draft.tables = data.tables;
+            }
           }),
 
         setHasRemoteUpdate: (at) =>

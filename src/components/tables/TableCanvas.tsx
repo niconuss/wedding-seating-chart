@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppStore } from '@/store/useAppStore';
 import { TableNode } from './TableNode';
+import { CanvasGuestChip } from '@/components/canvas/CanvasGuestChip';
 import { tableBounds } from '@/utils/geometry';
 import type { Table } from '@/types/table';
 
@@ -71,6 +72,7 @@ function ActionBtn({
 
 export function TableCanvas() {
   const tables = useAppStore((s) => s.tables);
+  const canvasGuests = useAppStore((s) => s.canvasGuests);
   const selectedTableId = useAppStore((s) => s.selectedTableId);
   const removeTable = useAppStore((s) => s.removeTable);
   const unseatAllAtTable = useAppStore((s) => s.unseatAllAtTable);
@@ -251,6 +253,10 @@ export function TableCanvas() {
 
       {tables.map((table) => (
         <TableNode key={table.id} table={table} />
+      ))}
+
+      {canvasGuests.map((cg) => (
+        <CanvasGuestChip key={cg.guestId} guestId={cg.guestId} x={cg.x} y={cg.y} />
       ))}
     </>
   );
