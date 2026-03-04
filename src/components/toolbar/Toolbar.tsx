@@ -22,7 +22,7 @@ export function Toolbar() {
       <div className="h-12 bg-white border-b border-gray-200 flex items-center px-4 gap-2 shrink-0">
         <div className="mr-3">
           <span style={{ fontFamily: "'Playfair Display', Georgia, serif" }} className="text-lg font-bold tracking-tight text-gray-800">
-            Seat<span className="text-teal-600">Heart</span>
+            Seat<span className="text-teal-600">Heart</span> ✓
           </span>
         </div>
 
