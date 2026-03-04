@@ -93,6 +93,7 @@ export function TableCanvas() {
   });
 
   const selectedTableIds = useAppStore((s) => s.selectedTableIds);
+  const alignmentGuides = useAppStore((s) => s.alignmentGuides);
 
   const selectedGroup = useMemo(() => {
     if (selectedTableIds.length === 0) return [];
@@ -238,6 +239,14 @@ export function TableCanvas() {
           )}
         </div>,
         document.body
+      )}
+
+      {/* Alignment guide lines */}
+      {alignmentGuides.x !== null && (
+        <div style={{ position: 'absolute', left: alignmentGuides.x, top: -10000, width: 1, height: 20000, background: '#2B7FFF', opacity: 0.5, pointerEvents: 'none', transform: 'translateX(-0.5px)' }} />
+      )}
+      {alignmentGuides.y !== null && (
+        <div style={{ position: 'absolute', left: -10000, top: alignmentGuides.y, width: 20000, height: 1, background: '#2B7FFF', opacity: 0.5, pointerEvents: 'none', transform: 'translateY(-0.5px)' }} />
       )}
 
       {tables.map((table) => (

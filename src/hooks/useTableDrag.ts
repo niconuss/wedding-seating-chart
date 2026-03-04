@@ -80,11 +80,31 @@ export function useTableDrag(tableId: string) {
         } else {
           const snap = checkSnap(id, proposedX, proposedY, currentTables);
           if (snap.partnerId) {
+            useAppStore.getState().setAlignmentGuides({ x: null, y: null });
             snapTables(id, snap.partnerId, snap.edge!);
             startTableRef.current = { x: snap.snappedX - dx, y: snap.snappedY - dy };
             moveTable(id, snap.snappedX, snap.snappedY);
           } else {
-            moveTable(id, proposedX, proposedY);
+            // Alignment snapping — snap to other tables' X or Y centers
+            const THRESHOLD = 12 / scale;
+            let snapX = proposedX;
+            let snapY = proposedY;
+            let guideX: number | null = null;
+            let guideY: number | null = null;
+            for (const other of currentTables) {
+              if (other.id === id) continue;
+              if (guideX === null && Math.abs(proposedX - other.x) < THRESHOLD) {
+                snapX = other.x; guideX = other.x;
+              }
+              if (guideY === null && Math.abs(proposedY - other.y) < THRESHOLD) {
+                snapY = other.y; guideY = other.y;
+              }
+            }
+            const current = useAppStore.getState().alignmentGuides;
+            if (current.x !== guideX || current.y !== guideY) {
+              useAppStore.getState().setAlignmentGuides({ x: guideX, y: guideY });
+            }
+            moveTable(id, snapX, snapY);
           }
         }
       }
@@ -92,6 +112,7 @@ export function useTableDrag(tableId: string) {
       function onUp() {
         isDraggingRef.current = false;
         setIsDraggingTable(false);
+        useAppStore.getState().setAlignmentGuides({ x: null, y: null });
         activeDragIdRef.current = tableId;
         window.removeEventListener('mousemove', onMove);
         window.removeEventListener('mouseup', onUp);

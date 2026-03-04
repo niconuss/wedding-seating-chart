@@ -77,6 +77,8 @@ export interface AppState {
   setIsGroupRenaming: (v: boolean) => void;
   hoveredTableId: string | null;
   setHoveredTableId: (id: string | null) => void;
+  alignmentGuides: { x: number | null; y: number | null };
+  setAlignmentGuides: (guides: { x: number | null; y: number | null }) => void;
   fitToScreen: () => void;
   // Undo/redo
   canUndo: boolean;
@@ -120,6 +122,7 @@ export const useAppStore = create<AppState>()(
         selectedTableIds: [],
         isGroupRenaming: false,
         hoveredTableId: null,
+        alignmentGuides: { x: null, y: null },
         canUndo: false,
         canRedo: false,
 
@@ -348,6 +351,10 @@ export const useAppStore = create<AppState>()(
         setHoveredTableId: (id) =>
           set((draft) => {
             draft.hoveredTableId = id;
+          }),
+        setAlignmentGuides: (guides) =>
+          set((draft) => {
+            draft.alignmentGuides = guides;
           }),
         fitToScreen: () =>
           set((draft) => {
