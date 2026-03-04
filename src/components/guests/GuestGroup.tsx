@@ -199,9 +199,11 @@ export function GuestGroup({ groupName, guests, onDragHandleStart, onDragHandleE
                         onGuestSelect={onGuestSelect}
                       />
                     ) : (
-                      <div className="mx-3 py-1.5 text-[10px] text-center rounded border border-dashed transition-colors border-gray-200 text-gray-300">
-                        Drop guests here
-                      </div>
+                      <SubgroupDropTarget groupName={groupName} subgroupName={sg}>
+                        <div className="mx-3 py-1.5 text-[10px] text-center rounded border border-dashed transition-colors border-gray-200 text-gray-300">
+                          Drop guests here
+                        </div>
+                      </SubgroupDropTarget>
                     )}
                   </div>
                 );
