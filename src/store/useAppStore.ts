@@ -174,6 +174,13 @@ export const useAppStore = create<AppState>()(
         ...tableSlice,
         ...versionSlice,
 
+        // Override seatGuest to also remove the guest from canvasGuests
+        seatGuest: (guestId: string, tableId: string, seatIndex: number) => set((draft) => {
+          const g = draft.guests.find((g) => g.id === guestId);
+          if (g) { g.tableId = tableId; g.seatIndex = seatIndex; }
+          draft.canvasGuests = draft.canvasGuests.filter((cg) => cg.guestId !== guestId);
+        }),
+
         // Persisted ordering state
         groupOrder: [],
         subgroupOrder: {},

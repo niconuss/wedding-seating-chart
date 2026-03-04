@@ -6,6 +6,7 @@ import { PagesPanel } from './PagesPanel';
 
 export function GuestPanel() {
   const guests = useAppStore((s) => s.guests);
+  const canvasGuests = useAppStore((s) => s.canvasGuests);
   const addManualGuest = useAppStore((s) => s.addManualGuest);
   const checkpoint = useAppStore((s) => s.checkpoint);
   const groupOrder = useAppStore((s) => s.groupOrder);
@@ -21,8 +22,11 @@ export function GuestPanel() {
   const [draggedGroup, setDraggedGroup] = useState<string | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
+  const canvasGuestIds = new Set(canvasGuests.map((cg) => cg.guestId));
+  const sidebarGuests = guests.filter((g) => !canvasGuestIds.has(g.id));
+
   const groupMap = new Map<string, typeof guests>();
-  for (const guest of guests) {
+  for (const guest of sidebarGuests) {
     if (!groupMap.has(guest.group)) groupMap.set(guest.group, []);
     groupMap.get(guest.group)!.push(guest);
   }
@@ -37,6 +41,7 @@ export function GuestPanel() {
   const existingGroups = allGroupNames.sort();
   const totalGuests = guests.length;
   const seatedGuests = guests.filter((g) => g.tableId !== null).length;
+  // Canvas guests are neither seated nor shown in sidebar
 
   useEffect(() => {
     if (showAddForm) nameInputRef.current?.focus();
