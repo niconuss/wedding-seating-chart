@@ -130,7 +130,7 @@ export interface AppState {
 }
 
 // ── History stacks (module-level, outside Zustand, max 50 snapshots) ─────────
-type Snapshot = { tables: Table[]; guests: Guest[]; parties: Party[] };
+type Snapshot = { tables: Table[]; guests: Guest[]; parties: Party[]; canvasGuests: { guestId: string; x: number; y: number }[] };
 const _history: Snapshot[] = [];
 const _redoStack: Snapshot[] = [];
 
@@ -216,34 +216,36 @@ export const useAppStore = create<AppState>()(
         pendingRemoteUpdate: null,
 
         checkpoint: () => {
-          const { guests, parties, tables } = get();
+          const { guests, parties, tables, canvasGuests } = get();
           if (_history.length >= 50) _history.shift();
-          _history.push(JSON.parse(JSON.stringify({ guests, parties, tables })));
+          _history.push(JSON.parse(JSON.stringify({ guests, parties, tables, canvasGuests })));
           _redoStack.length = 0;
           set((draft) => { draft.canUndo = true; draft.canRedo = false; });
         },
         undo: () => {
           if (_history.length === 0) return;
-          const { guests, parties, tables } = get();
-          _redoStack.push(JSON.parse(JSON.stringify({ guests, parties, tables })));
+          const { guests, parties, tables, canvasGuests } = get();
+          _redoStack.push(JSON.parse(JSON.stringify({ guests, parties, tables, canvasGuests })));
           const prev = _history.pop()!;
           set((draft) => {
             draft.guests = prev.guests;
             draft.parties = prev.parties;
             draft.tables = prev.tables;
+            draft.canvasGuests = prev.canvasGuests;
             draft.canUndo = _history.length > 0;
             draft.canRedo = true;
           });
         },
         redo: () => {
           if (_redoStack.length === 0) return;
-          const { guests, parties, tables } = get();
-          _history.push(JSON.parse(JSON.stringify({ guests, parties, tables })));
+          const { guests, parties, tables, canvasGuests } = get();
+          _history.push(JSON.parse(JSON.stringify({ guests, parties, tables, canvasGuests })));
           const next = _redoStack.pop()!;
           set((draft) => {
             draft.guests = next.guests;
             draft.parties = next.parties;
             draft.tables = next.tables;
+            draft.canvasGuests = next.canvasGuests;
             draft.canUndo = true;
             draft.canRedo = _redoStack.length > 0;
           });

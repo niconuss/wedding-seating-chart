@@ -13,6 +13,7 @@ export function CanvasGuestChip({ guestId, x, y }: CanvasGuestChipProps) {
   const guest = useAppStore((s) => s.guests.find((g) => g.id === guestId));
   const moveCanvasGuest = useAppStore((s) => s.moveCanvasGuest);
   const removeGuestFromCanvas = useAppStore((s) => s.removeGuestFromCanvas);
+  const checkpoint = useAppStore((s) => s.checkpoint);
 
   const startPos = useRef<{ x: number; y: number; mouseX: number; mouseY: number } | null>(null);
 
@@ -29,7 +30,7 @@ export function CanvasGuestChip({ guestId, x, y }: CanvasGuestChipProps) {
     // Only handle primary button, and not × button clicks
     if (e.button !== 0) return;
     e.stopPropagation();
-
+    checkpoint();
     startPos.current = { x, y, mouseX: e.clientX, mouseY: e.clientY };
 
     function onMouseMove(me: MouseEvent) {

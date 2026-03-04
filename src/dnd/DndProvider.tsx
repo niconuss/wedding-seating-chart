@@ -75,6 +75,7 @@ export function AppDndProvider({ children }: { children: React.ReactNode }) {
 
       if (dragData.source === 'canvas') {
         // Repositioning a canvas guest — just move it
+        checkpoint();
         moveCanvasGuest(guestId, canvasX, canvasY);
       } else if (dragData.multiSelectIds && dragData.multiSelectIds.length > 1) {
         const ids = dragData.multiSelectIds;
