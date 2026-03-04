@@ -175,7 +175,7 @@ export function CanvasArea() {
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="text-center text-gray-400">
             <div className="text-4xl mb-3">🪑</div>
-            <p className="text-sm">Add tables using the toolbar above</p>
+            <p className="text-sm">Add tables using the toolbar below</p>
             <p className="text-xs mt-1">Shift+drag to pan · Scroll to zoom</p>
           </div>
         </div>

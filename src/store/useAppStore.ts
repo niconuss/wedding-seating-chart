@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Guest } from '@/types/guest';
 import type { Party } from '@/types/party';
 import type { Table } from '@/types/table';
@@ -67,6 +66,16 @@ export interface AppState {
   loadVersion: (versionId: string) => void;
   deleteVersion: (versionId: string) => void;
 
+  // Firebase sync
+  loadRemoteState: (data: {
+    guests?: Guest[];
+    parties?: Party[];
+    tables?: Table[];
+    versions?: Version[];
+    groupOrder?: string[];
+    subgroupOrder?: Record<string, string[]>;
+  }) => void;
+
   // UI actions
   setCanvasTransform: (t: { x: number; y: number; scale: number }) => void;
   setActiveError: (msg: string | null) => void;
@@ -94,8 +103,7 @@ const _history: Snapshot[] = [];
 const _redoStack: Snapshot[] = [];
 
 export const useAppStore = create<AppState>()(
-  persist(
-    immer((set, get) => {
+  immer((set, get) => {
       const guestSlice = createGuestSlice(set as Parameters<typeof createGuestSlice>[0]);
       const partySlice = createPartySlice(set as Parameters<typeof createPartySlice>[0]);
       const tableSlice = createTableSlice(
@@ -360,19 +368,16 @@ export const useAppStore = create<AppState>()(
           set((draft) => {
             draft.canvasTransform = { x: 0, y: 0, scale: 1 };
           }),
+
+        loadRemoteState: (data) =>
+          set((draft) => {
+            if (data.guests !== undefined) draft.guests = data.guests;
+            if (data.parties !== undefined) draft.parties = data.parties;
+            if (data.tables !== undefined) draft.tables = data.tables;
+            if (data.versions !== undefined) draft.versions = data.versions;
+            if (data.groupOrder !== undefined) draft.groupOrder = data.groupOrder;
+            if (data.subgroupOrder !== undefined) draft.subgroupOrder = data.subgroupOrder;
+          }),
       };
-    }),
-    {
-      name: 'wedding-seating-chart',
-      storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({
-        guests: state.guests,
-        parties: state.parties,
-        tables: state.tables,
-        versions: state.versions,
-        groupOrder: state.groupOrder,
-        subgroupOrder: state.subgroupOrder,
-      }),
-    }
-  )
+    })
 );
