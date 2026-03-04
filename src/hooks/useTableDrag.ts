@@ -58,8 +58,8 @@ export function useTableDrag(tableId: string) {
         if (isInGroup) {
           const prevX = currentTable.x;
           const prevY = currentTable.y;
-          const moveDx = proposedX - prevX;
-          const moveDy = proposedY - prevY;
+          let moveDx = proposedX - prevX;
+          let moveDy = proposedY - prevY;
 
           if (currentTable.snappedTo) {
             const snapPartner = currentTables.find((t) => t.id === currentTable.snappedTo);
@@ -71,11 +71,51 @@ export function useTableDrag(tableId: string) {
                 unsnapTable(id);
                 const partnersSnappedToThis = currentTables.filter((t) => t.snappedTo === id);
                 for (const p of partnersSnappedToThis) unsnapTable(p.id);
+                useAppStore.getState().setAlignmentGuides({ x: null, y: null });
                 moveTable(id, proposedX, proposedY);
                 return;
               }
             }
           }
+
+          // Compute full group membership via BFS
+          const groupIds = new Set<string>();
+          const q = [id];
+          while (q.length > 0) {
+            const gid = q.pop()!;
+            if (groupIds.has(gid)) continue;
+            groupIds.add(gid);
+            const t = currentTables.find((t) => t.id === gid);
+            if (!t) continue;
+            if (t.snappedTo) q.push(t.snappedTo);
+            for (const other of currentTables) {
+              if (other.snappedTo === gid) q.push(other.id);
+            }
+          }
+
+          // Alignment snapping for the group
+          const THRESHOLD = 12 / scale;
+          let guideX: number | null = null;
+          let guideY: number | null = null;
+          const nonGroup = currentTables.filter((t) => !groupIds.has(t.id));
+          for (const t of currentTables.filter((t) => groupIds.has(t.id))) {
+            for (const other of nonGroup) {
+              if (guideX === null && Math.abs((t.x + moveDx) - other.x) < THRESHOLD) {
+                moveDx += other.x - (t.x + moveDx);
+                guideX = other.x;
+              }
+              if (guideY === null && Math.abs((t.y + moveDy) - other.y) < THRESHOLD) {
+                moveDy += other.y - (t.y + moveDy);
+                guideY = other.y;
+              }
+            }
+            if (guideX !== null && guideY !== null) break;
+          }
+          const currentGuides = useAppStore.getState().alignmentGuides;
+          if (currentGuides.x !== guideX || currentGuides.y !== guideY) {
+            useAppStore.getState().setAlignmentGuides({ x: guideX, y: guideY });
+          }
+
           useAppStore.getState().moveSnappedPair(id, moveDx, moveDy);
         } else {
           const snap = checkSnap(id, proposedX, proposedY, currentTables);
