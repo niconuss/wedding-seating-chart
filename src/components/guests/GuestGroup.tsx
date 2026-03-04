@@ -177,12 +177,12 @@ export function GuestGroup({ groupName, guests, onDragHandleStart, onDragHandleE
                     {/* Sub-group header — drop target */}
                     <SubgroupDropTarget groupName={groupName} subgroupName={sg}>
                       <div
-                        className="flex items-center gap-1 px-2 py-1 mx-1 rounded text-[11px] font-semibold text-gray-500 transition-colors bg-gray-50"
+                        className="group flex items-center gap-1 px-2 py-1 mx-1 rounded text-[11px] font-semibold text-gray-500 transition-colors bg-gray-50"
                       >
                         <span className="flex-1 truncate">{sg}</span>
                         <button
                           onClick={() => removeSubgroup(groupName, sg)}
-                          className="opacity-0 hover:opacity-100 text-gray-300 hover:text-red-400 transition-all"
+                          className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-all"
                           title={`Delete sub-group "${sg}"`}
                           onPointerDown={(e) => e.stopPropagation()}
                         >
