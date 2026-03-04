@@ -17,6 +17,7 @@ export function SeatedGuestChip({ guestId, tableId, seatIndex, style, labelAbove
   const parties = useAppStore((s) => s.parties);
   const unseatGuest = useAppStore((s) => s.unseatGuest);
   const seatGuestAtTable = useAppStore((s) => s.seatGuestAtTable);
+  const checkpoint = useAppStore((s) => s.checkpoint);
 
   const guest = guests.find((g) => g.id === guestId);
   const party = guest ? parties.find((p) => p.id === guest.partyId) : undefined;
@@ -39,6 +40,7 @@ export function SeatedGuestChip({ guestId, tableId, seatIndex, style, labelAbove
 
   function handleRemove(e: React.MouseEvent) {
     e.stopPropagation();
+    checkpoint();
     unseatGuest(guestId);
     seatGuestAtTable(tableId, seatIndex, null);
   }
