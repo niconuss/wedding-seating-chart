@@ -2,12 +2,10 @@ import {
   DndContext,
   PointerSensor,
   pointerWithin,
-  closestCenter,
   useSensor,
   useSensors,
   type DragEndEvent,
   type DragStartEvent,
-  type CollisionDetection,
 } from '@dnd-kit/core';
 import { useState } from 'react';
 import { useAppStore } from '@/store/useAppStore';
@@ -21,12 +19,6 @@ export interface DragData {
   source?: 'canvas';
 }
 
-// Prefer the seat the pointer is physically inside; fall back to closest center.
-const seatCollision: CollisionDetection = (args) => {
-  const within = pointerWithin(args);
-  if (within.length > 0) return within;
-  return closestCenter(args);
-};
 
 export function AppDndProvider({ children }: { children: React.ReactNode }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -170,7 +162,7 @@ export function AppDndProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <DndContext sensors={sensors} collisionDetection={seatCollision} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       {children}
       <DragOverlayContent activeGuestId={activeGuestId} />
     </DndContext>
