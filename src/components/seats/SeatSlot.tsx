@@ -8,7 +8,7 @@ interface SeatSlotProps {
 }
 
 export function SeatSlot({ tableId, seatIndex, occupied, style }: SeatSlotProps) {
-  const { setNodeRef, isOver } = useDropSeat(tableId, seatIndex, occupied);
+  const { setNodeRef, isOver } = useDropSeat(tableId, seatIndex);
 
   return (
     <div
