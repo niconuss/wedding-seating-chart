@@ -67,11 +67,21 @@ export function AppDndProvider({ children }: { children: React.ReactNode }) {
       const canvasX = (viewportX - areaRect.left - canvasTransform.x) / canvasTransform.scale;
       const canvasY = (viewportY - areaRect.top - canvasTransform.y) / canvasTransform.scale;
 
+      // Only act on canvas-area drops — releasing outside the canvas (sidebar, toolbar, etc.)
+      // is treated as a cancel: canvas guests stay put, seated guests stay seated.
+      const droppedInCanvas =
+        viewportX >= areaRect.left &&
+        viewportX <= areaRect.right &&
+        viewportY >= areaRect.top &&
+        viewportY <= areaRect.bottom;
+
+      if (!droppedInCanvas) return;
+
       if (dragData.source === 'canvas') {
         // Repositioning a canvas guest — just move it
         moveCanvasGuest(guestId, canvasX, canvasY);
       } else {
-        // Check if the guest was seated (drag from seat to empty canvas)
+        // Seated guest dragged to empty canvas → park as floating chip
         const guest = guests.find((g) => g.id === guestId);
         if (guest?.tableId) {
           placeGuestOnCanvas(guestId, canvasX, canvasY);
